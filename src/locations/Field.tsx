@@ -58,7 +58,7 @@ const Field = () => {
   return (
     <Flex flexDirection="column" gap="40px">
       {/* DEBUG BUTTONS */}
-      <Flex gap="20px">
+      {/* <Flex gap="20px">
         <Button onClick={() => console.log(field.getValue())}>
           log field.getValue()
         </Button>
@@ -88,7 +88,7 @@ const Field = () => {
         >
           log fields in all locales
         </Button>
-      </Flex>
+      </Flex> */}
       <Flex flexDirection="column" gap="8px">
         {pairs &&
           Object.entries(pairs).map(([key, value], index) => {
