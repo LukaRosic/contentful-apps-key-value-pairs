@@ -2,107 +2,160 @@ import React, { useEffect, useState } from "react";
 import {
   Button,
   Flex,
-  SectionHeading,
+  FormControl,
   TextInput,
 } from "@contentful/f36-components";
-import { FieldAppSDK } from "@contentful/app-sdk";
+import {
+  EntryAPI,
+  FieldAPI,
+  FieldAppSDK,
+  WindowAPI,
+} from "@contentful/app-sdk";
 import { useSDK } from "@contentful/react-apps-toolkit";
+
+const MAIN_LOCALE = "en-US";
+type PairType = {
+  [key: string]: string;
+};
 
 const Field = () => {
   const sdk = useSDK<FieldAppSDK>();
-  const [newPair, setNewPair] = useState({ key: "", value: "" });
-  const [initialJSON, setInitialJSON] = useState<{ [key: string]: string }>(
-    sdk.field.getValue()
-  );
 
-  sdk.field.onValueChanged((value) => {
-    if (JSON.stringify(value) !== JSON.stringify(initialJSON))
-      setInitialJSON(value);
+  const window: WindowAPI | null = sdk.window ?? null;
+  const field: FieldAPI | null = sdk.field ?? null;
+  const entry: EntryAPI | null = sdk.entry ?? null;
+  const isMainLocale = field.locale === MAIN_LOCALE;
+  const [pairs, setPairs] = useState<PairType>({});
+
+  useEffect(() => {
+    resize();
   });
 
-  useEffect(() => {
-    sdk.window.startAutoResizer();
-  }, [initialJSON]);
+  const resize = () => {
+    window?.startAutoResizer();
 
-  useEffect(() => {
-    if (!!!Object.keys(initialJSON).length) {
-      setInitialJSON(sdk.entry.fields[sdk.field.id].getValue("en-US"));
-      sdk.field.setValue(sdk.entry.fields[sdk.field.id].getValue("en-US"));
-    }
-  }, []);
-
-  const updateFieldValue = () => {
-    sdk.field.setValue({ ...initialJSON, [newPair.key]: newPair.value });
-    setNewPair({ key: "", value: "" });
-  };
-
-  const removePair = (key: string) => {
-    sdk.locales.available.forEach((locale) => {
-      const data = sdk.entry.fields[sdk.field.id].getValue(locale);
-      const { [key]: toRemove, ...rest } = data;
-      sdk.entry.fields[sdk.field.id].setValue(rest, locale);
-      setInitialJSON(rest);
+    // Every time we change the value on the field, we update internal state
+    field?.onValueChanged((value: PairType) => {
+      setPairs(value);
     });
   };
 
+  const handleDelete = (key: string) => {
+    sdk.locales.available.forEach((locale) => {
+      const localeField = entry.fields[field.id].getValue(locale);
+      const { [key]: keyToDelete, ...rest } = localeField;
+      entry.fields[field.id].setValue(rest, locale);
+    });
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    key: string
+  ) => {
+    const oldField = field.getValue();
+    field.setValue({ ...oldField, [key]: e.target.value });
+  };
   return (
     <Flex flexDirection="column" gap="40px">
-      <Flex flexDirection="column">
-        <Flex gap="30px" style={{ height: "20px" }}>
-          <SectionHeading style={{ flexGrow: "1" }}>
-            {sdk.parameters.instance.key}
-          </SectionHeading>
-          <SectionHeading style={{ flexGrow: "1" }}>
-            {sdk.parameters.instance.value}
-          </SectionHeading>
-        </Flex>
-        {Object.entries(initialJSON).map(([key, value]) => (
-          <Flex key={key} gap="30px">
-            <TextInput isDisabled={true} value={key} placeholder="key" />
-            <TextInput
-              placeholder={value}
-              value={value}
-              onChange={(e) => {
-                sdk.field.setValue({ ...initialJSON, [key]: e.target.value });
-              }}
-            />
-            {sdk.field.locale === "en-US" && (
-              <Button variant="negative" onClick={() => removePair(key)}>
-                X
-              </Button>
-            )}
-          </Flex>
-        ))}
+      {/* DEBUG BUTTONS */}
+      {/* <Flex gap="20px">
+        <Button onClick={() => console.log(field.getValue())}>
+          log field.getValue()
+        </Button>
+        <Button
+          onClick={() => {
+            sdk.locales.available.forEach((locale) => {
+              entry.fields[field.id].setValue(undefined, locale);
+            });
+          }}
+          variant="negative"
+        >
+          clear all fields
+        </Button>
+        <Button onClick={() => console.log("state: ", pairs)}>LOG STATE</Button>
+        <Button
+          onClick={() => {
+            sdk.locales.available.forEach((locale) => {
+              console.log("");
+              console.log("locale: ", locale);
+              console.log(
+                "getvalue: ",
+                entry.fields[field.id].getValue(locale)
+              );
+            });
+          }}
+          variant="negative"
+        >
+          log fields in all locales
+        </Button>
+      </Flex> */}
+      <Flex flexDirection="column" gap="8px">
+        {pairs &&
+          Object.entries(pairs).map(([key, value], index) => {
+            return (
+              <Flex gap="16px">
+                <TextInput isDisabled={true} value={key} placeholder="key" />
+                <TextInput
+                  value={value}
+                  placeholder="value"
+                  onChange={(e) => handleChange(e, key)}
+                />
+                {isMainLocale && (
+                  <Button variant="negative" onClick={() => handleDelete(key)}>
+                    x
+                  </Button>
+                )}
+              </Flex>
+            );
+          })}
       </Flex>
-
-      {sdk.field.locale === "en-US" ? (
-        <Flex flexDirection="column">
-          <SectionHeading style={{ height: "20px", marginBottom: 0 }}>
-            NEW PAIR
-          </SectionHeading>
-          <Flex gap="30px">
-            <TextInput
-              onChange={(e) => setNewPair({ ...newPair, key: e.target.value })}
-              value={newPair.key}
-              placeholder={sdk.parameters.instance.key}
-            />
-            <TextInput
-              onChange={(e) =>
-                setNewPair({ ...newPair, value: e.target.value })
-              }
-              value={newPair.value}
-              placeholder={sdk.parameters.instance.value}
-            />
-            <Button onClick={updateFieldValue} variant="positive">
-              +
-            </Button>
-          </Flex>
-        </Flex>
-      ) : (
-        "Change locale to en-US to add more elements"
-      )}
+      {isMainLocale && <NewField sdk={sdk} field={field} entry={entry} />}
     </Flex>
   );
 };
 
 export default Field;
+
+type NewFieldProps = {
+  field: FieldAPI;
+  entry: EntryAPI;
+  sdk: FieldAppSDK;
+};
+const NewField = ({ field, entry, sdk }: NewFieldProps) => {
+  const [newField, setNewField] = useState({ key: "", value: "" });
+  return (
+    <FormControl>
+      <FormControl.Label>Add new Pair</FormControl.Label>
+      <Flex gap="16px">
+        <TextInput
+          placeholder="key"
+          value={newField.key}
+          onChange={(e) => setNewField({ ...newField, key: e.target.value })}
+        ></TextInput>
+        <TextInput
+          placeholder="value"
+          value={newField.value}
+          onChange={(e) => setNewField({ ...newField, value: e.target.value })}
+        ></TextInput>
+        <Button
+          variant="positive"
+          isDisabled={!!!newField.key || !!!newField.value}
+          onClick={() => {
+            const newPair = { [newField.key]: newField.value };
+
+            sdk.locales.available.forEach((locale) => {
+              const oldField = entry.fields[field.id].getValue(locale);
+              entry.fields[field.id].setValue(
+                { ...oldField, ...newPair },
+                locale
+              );
+            });
+            setNewField({ key: "", value: "" });
+          }}
+        >
+          +
+        </Button>
+      </Flex>
+    </FormControl>
+  );
+};
